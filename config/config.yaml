@@ -1,0 +1,187 @@
+# =============================================================================
+# Deepfake Video Detection System — Configuration File
+# =============================================================================
+
+# ─────────────────────────────────────────────
+# Project Paths
+# ─────────────────────────────────────────────
+paths:
+  data_root: "data"
+  train_dir: "data/train"
+  val_dir: "data/val"
+  test_dir: "data/test"
+  raw_videos_dir: "data/raw"
+  processed_frames_dir: "data/processed"
+  model_save_dir: "models/saved"
+  log_dir: "logs"
+  output_dir: "outputs"
+  tensorboard_dir: "runs"          # TensorBoard log directory
+
+# ─────────────────────────────────────────────
+# Real Dataset Configuration
+# ─────────────────────────────────────────────
+dataset:
+  name: "celebdf_v2"               # Options: celebdf_v2, faceforensics, dfdc, custom
+  # Celeb-DF v2 (recommended — public, no registration)
+  celebdf_v2:
+    download_url: "https://drive.google.com/drive/folders/1tb-vFiLPGEXNRVxj4WbEy_w12T2V7-c2"
+    real_subdir: "YouTube-real"
+    fake_subdir: "Celeb-synthesis"
+    list_file: "List_of_testing_videos.txt"
+  # FaceForensics++ (requires form submission at github.com/ondyari/FaceForensics)
+  faceforensics:
+    manipulation: "Deepfakes"       # Deepfakes | Face2Face | FaceShifter | FaceSwap
+    compression: "c23"              # c0 (raw) | c23 (HQ) | c40 (LQ)
+    real_subdir: "original_sequences/youtube"
+    fake_subdir: "manipulated_sequences"
+  # DFDC (requires Kaggle API)
+  dfdc:
+    kaggle_dataset: "c/deepfake-detection-challenge"
+    metadata_file: "metadata.json"
+  # Custom dataset (any source)
+  custom:
+    real_dir: "data/raw/real"       # Put real videos/images here
+    fake_dir: "data/raw/fake"       # Put fake videos/images here
+
+# ─────────────────────────────────────────────
+# Data Configuration
+# ─────────────────────────────────────────────
+data:
+  image_size: 224
+  inception_size: 299
+  num_classes: 2
+  class_names: ["real", "fake"]
+  train_split: 0.70
+  val_split: 0.15
+  test_split: 0.15
+  num_workers: 4
+  pin_memory: true
+  # Class balancing
+  max_samples_per_class: null       # null = use all; set integer to cap (e.g. 5000)
+  use_weighted_sampler: true        # Handles class imbalance automatically
+
+# ─────────────────────────────────────────────
+# Frame Extraction
+# ─────────────────────────────────────────────
+frame_extraction:
+  frame_interval: 10
+  max_frames_per_video: 30
+  min_frames: 5
+  face_margin: 0.3
+  min_face_size: 50
+  face_confidence_threshold: 0.5
+  # Image mode face detection
+  image_face_margin: 0.2            # Tighter margin for single images
+  fallback_to_full_image: true      # Use full image if no face detected
+
+# ─────────────────────────────────────────────
+# Training Hyperparameters
+# ─────────────────────────────────────────────
+training:
+  batch_size: 32
+  num_epochs: 5
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  momentum: 0.9
+  lr_scheduler: "cosine"
+  lr_step_size: 7
+  lr_gamma: 0.1
+  early_stopping_patience: 7
+  grad_clip_value: 1.0
+  use_amp: true
+  seed: 42
+  # Resume training
+  resume: false                     # Set to true to resume from last checkpoint
+  resume_from: null                 # null = auto-detect from save_path; or explicit path
+  # Label smoothing (helps generalization)
+  label_smoothing: 0.1
+  # Warmup
+  warmup_epochs: 2                  # Linear LR warmup before main schedule
+
+# ─────────────────────────────────────────────
+# Model Configuration
+# ─────────────────────────────────────────────
+models:
+  resnet50:
+    name: "resnet50"
+    pretrained: true
+    freeze_layers: false
+    dropout: 0.5
+    save_path: "models/saved/resnet50_best.pth"
+    resume_path: "models/saved/resnet50_last.pth"   # Last epoch checkpoint
+
+  vgg16:
+    name: "vgg16"
+    pretrained: true
+    freeze_layers: false
+    dropout: 0.5
+    save_path: "models/saved/vgg16_best.pth"
+    resume_path: "models/saved/vgg16_last.pth"
+
+  inceptionv3:
+    name: "inceptionv3"
+    pretrained: true
+    freeze_layers: false
+    dropout: 0.5
+    save_path: "models/saved/inceptionv3_best.pth"
+    resume_path: "models/saved/inceptionv3_last.pth"
+
+# ─────────────────────────────────────────────
+# Ensemble Configuration
+# ─────────────────────────────────────────────
+ensemble:
+  method: "soft_voting"
+  weights:
+    resnet50: 0.40
+    vgg16: 0.30
+    inceptionv3: 0.30
+  confidence_threshold: 0.5
+
+# ─────────────────────────────────────────────
+# Augmentation
+# ─────────────────────────────────────────────
+augmentation:
+  train:
+    horizontal_flip: true
+    vertical_flip: false
+    rotation: 15
+    brightness: 0.3
+    contrast: 0.3
+    saturation: 0.3
+    hue: 0.1
+    random_erasing: true
+    jpeg_compression: true          # Simulate JPEG artifacts (important for deepfakes)
+    jpeg_quality_min: 60
+    jpeg_quality_max: 95
+    gaussian_noise: true
+    gaussian_blur: true
+    normalize_mean: [0.485, 0.456, 0.406]
+    normalize_std: [0.229, 0.224, 0.225]
+  val:
+    normalize_mean: [0.485, 0.456, 0.406]
+    normalize_std: [0.229, 0.224, 0.225]
+
+# ─────────────────────────────────────────────
+# Inference
+# ─────────────────────────────────────────────
+inference:
+  device: "auto"
+  batch_size: 16
+  tta: false
+  tta_flips: 3
+  # Image-specific inference
+  image_mode:
+    face_detection: true            # Run face detection on single images
+    return_gradcam: true            # Auto-generate Grad-CAM for image predictions
+    gradcam_layer: null             # null = auto-detect per model
+
+# ─────────────────────────────────────────────
+# Logging & Monitoring
+# ─────────────────────────────────────────────
+logging:
+  level: "INFO"
+  log_to_file: true
+  log_filename: "logs/deepfake_detector.log"
+  tensorboard: true                 # NOW ENABLED
+  tensorboard_dir: "runs"
+  log_every_n_batches: 50          # Log batch metrics every N batches
